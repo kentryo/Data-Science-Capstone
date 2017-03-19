@@ -1,0 +1,142 @@
+---
+title: "Data Science Capstone Milestone Report"
+author: "RH"
+date: "February 9, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+This is a milestone report for the coursera data science capstone coursera offered by Dr. Peng at John Hopkins University. This project aims at building a model for predictive texting. Data used in this study was offered by  a corpus called HC Corpora (http://www.corpora.heliohost.org) and specific readme file is  http://www.corpora.heliohost.org/aboutcorpus.html. The main approach in this study is n-gram model for prediction.
+
+This milestone report contains exploratory analysis and summary of the data.
+
+## Loading and exploring the data
+```{r cache=TRUE}
+setwd("C:/Users/runze/Documents/Coursera/Data Science JHU/data science capstone")
+if (!file.exists("Coursera-SwiftKey.zip")) {
+  download.file("https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip", "Coursera-SwiftKey.zip")
+  unzip("Coursera-SwiftKey.zip")
+}
+```
+
+Due to that the data contains several languages, only English version will be used in this study. Three types of data, news, blog, and twitter will be included in the study.
+
+```{r}
+blog <- readLines(file("final/en_US/en_US.blogs.txt",open = "rb"))
+news <- readLines(file("final/en_US/en_US.news.txt",open = "rb"))
+twitter <- readLines(file("final/en_US/en_US.twitter.txt",open = "rb"))
+```
+
+Calculate the data size info, data line count and data words count with the `stringi` package. And put the summary in a table.
+```{r}
+library(stringi)
+
+size_blog <- file.info("final/en_US/en_US.blogs.txt")$size/1024/1024
+size_news <- file.info("final/en_US/en_US.news.txt")$size/1024/1024
+size_twitter <- file.info("final/en_US/en_US.twitter.txt")$size/1024/1024
+
+linecount_blog <- length(blog)
+linecount_news <- length(news)
+linecount_twitter <- length(twitter)
+
+wordscount_blog <- stri_count_words(blog)
+wordscount_news <- stri_count_words(news)
+wordscount_twitter <- stri_count_words(twitter)
+```
+The summary table is as following:
+
+File Name|File size|Line Count|Words Count 
+-|-|-|- 
+en_US.blogs.txt|`r size_blog` MB |`r linecount_blog`|`r sum(wordscount_blog)` 
+en_US.news.txt|`r size_news` MB |`r linecount_news` |`r sum(wordscount_news)`
+en_US.twitter.txt|`r size_twitter` MB |`r linecount_twitter` |`r sum(wordscount_twitter)`
+
+## Cleaning the data
+For the following analysis, I created a corpus which consisted of all three data, blog, news, and twitter. And for performance consideration, 1% data was sampled from each data and put together for the corpus.
+```{r}
+set.seed(512)
+blog_sample <- sample(blog, linecount_blog*0.01)
+news_sample <- sample(news, linecount_news*0.01)
+twitter_sample <- sample(twitter, linecount_twitter*0.01)
+data_sample <- paste(blog_sample, news_sample, twitter_sample)
+length(data_sample)
+```
+
+And for the following analysis, I removed the numbers, punctuations, stopwords and special characters from the samples. And I transformed the letters to lowercase for ease of analysis. Package `tm` was used.
+```{r}
+library(tm)
+corpus_sample <- VCorpus(VectorSource(data_sample))
+corpus_sample <- tm_map(corpus_sample, removeNumbers)
+corpus_sample <- tm_map(corpus_sample, removePunctuation)
+corpus_sample <- tm_map(corpus_sample, stripWhitespace)
+corpus_sample <- tm_map(corpus_sample, removeWords, stopwords("english"))
+corpus_sample <- tm_map(corpus_sample, content_transformer(tolower))
+corpus_sample <- tm_map(corpus_sample, PlainTextDocument)
+```
+
+## N-gram exploratory analysis
+With the cleaned data, I will do n-gram analysis for the data. Unigram, bigram and trigram will be illustrated.
+```{r}
+library(RWeka)
+library(ggplot2)
+```
+
+### Unigram analysis
+With the `RWeka` package, I analyzed the 1-gram pattern and removed the sparsed words which appeared < 0.1% of the total samples. And the frequency of each 1-gram word was summarized.
+
+```{r}
+unigram <- function(x) NGramTokenizer(x, Weka_control(min = 1, max = 1))
+corpus_sample_unigram <- TermDocumentMatrix(corpus_sample, control = list(tokenize = unigram))
+corpus_sample_unigram_rsparsed <- removeSparseTerms(corpus_sample_unigram, 0.999)
+unigram_freq <- sort(rowSums(as.matrix(corpus_sample_unigram_rsparsed)), decreasing = TRUE)
+unigram_freq_table <- data.frame(ngram_word = names(unigram_freq), Frequency = unigram_freq)
+```
+Then I used the unigram frequency table for plotting the top 50 words.
+
+```{r}
+unigram_plot <- ggplot(unigram_freq_table[1:50, ], aes(reorder(ngram_word, -Frequency), Frequency))+
+  geom_bar(stat = "identity")+
+  ggtitle("Top 50 Unigram words")+
+  xlab("Unigram words")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.3, hjust = 1), plot.title = element_text(hjust = 0.5))
+unigram_plot
+```
+
+###Bigram and Trigram analysis
+Similar plots were made for bigram and trigram words
+```{r}
+bigram <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
+corpus_sample_bigram <- TermDocumentMatrix(corpus_sample, control = list(tokenize = bigram))
+corpus_sample_bigram_rsparsed <- removeSparseTerms(corpus_sample_bigram, 0.999)
+bigram_freq <- sort(rowSums(as.matrix(corpus_sample_bigram_rsparsed)), decreasing = TRUE)
+bigram_freq_table <- data.frame(ngram_word = names(bigram_freq), Frequency = bigram_freq)
+bigram_plot <- ggplot(bigram_freq_table[1:50, ], aes(reorder(ngram_word, -Frequency), Frequency))+
+  geom_bar(stat = "identity")+
+  ggtitle("Top 50 bigram words")+
+  xlab("bigram words")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.3, hjust = 1), plot.title = element_text(hjust = 0.5))
+bigram_plot
+```
+
+```{r}
+trigram <- function(x) NGramTokenizer(x, Weka_control(min = 3, max = 3))
+corpus_sample_trigram <- TermDocumentMatrix(corpus_sample, control = list(tokenize = trigram))
+corpus_sample_trigram_rsparsed <- removeSparseTerms(corpus_sample_trigram, 0.999)
+trigram_freq <- sort(rowSums(as.matrix(corpus_sample_trigram_rsparsed)), decreasing = TRUE)
+trigram_freq_table <- data.frame(ngram_word = names(trigram_freq), Frequency = trigram_freq)
+trigram_plot <- ggplot(trigram_freq_table[1:50, ], aes(reorder(ngram_word, -Frequency), Frequency))+
+  geom_bar(stat = "identity")+
+  ggtitle("Top 50 trigram words")+
+  xlab("trigram words")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.3, hjust = 1), plot.title = element_text(hjust = 0.5))
+trigram_plot
+```
+
+##Findinds and plans for the shiny app
+Based on the unigram analysis, I found that word "the" showed higher occurence than other words. During the following work, "the" might need to be noted for the prediction. And based on the bigram and trigram analysis, a lot of similar words patterns was found. To increase the precision of the prediction model, maybe 4-gram pattern should be included.
+
+For the shiny app, I planned to make a simple interface with an input and an output for the prediction model. During the previous exploration work, I found that this job took a lot of memory. During making the actual model, the use of memory needed to be monitored and taken into consideration.
