@@ -18,11 +18,16 @@ ui <- fluidPage(
   # Sidebar with a slider input for number of bins 
   sidebarLayout(
     sidebarPanel(
-      textInput("wordinput", label = h3("Input partial sentence"))
+      textInput("wordinput", label = h3("Type in partial sentence:")),
+      h5("Instructions: Put in a partial sentence or several words. This application will predict the next-word based on the n-gram words analysis."),
+      h5("Application Description: This application is aimed at predicting next-word using n-gram words analysis and simple backoff prediction methods."),
+      h5("This application is for the Coursera Data Science Capstone Course."),
+      h5("Code and relative data could be found at",a("My Github", href="https://github.com/kentryo/data-science-capstone/"))
     ),
     
     # Show a plot of the generated distribution
     mainPanel(
+      h3("The top 3 predicted next-words are:"),
       textOutput("wordprediction")
     )
    )
